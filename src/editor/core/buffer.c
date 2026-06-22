@@ -1,3 +1,4 @@
+#include <string.h>
 #include "buffer.h"
 
 /*
@@ -37,6 +38,8 @@
 * 100k lines or longer lines of text, but we will see.
 */
 
+#define INITIAL_BUFFER_SIZE 1024
+
 /*
 * There is line table which will be used to track where the lines are in the buffer.
 */
@@ -50,6 +53,7 @@ typedef struct line_entry_s line_entry_t;
 typedef struct {
     line_entry_t *entries; // Array of line entries
     size_t count; // Number of lines
+    size_t capacity; // Capacity of the line table
 } line_table_t;
 
 /*
@@ -59,8 +63,33 @@ typedef struct {
 struct buffer_s {
     char* data; // Pointer to the buffer data, will be allocated dynamically
     size_t size; // Size of the buffer
+    size_t used; // Amount of the buffer currently used
     line_table_t line_table; // The line table for tracking lines in the buffer
 };
+
+static bool reallocate_buffer(buffer *buffer, size_t new_size) {
+    // Implementation to reallocate the buffer to a new size
+    char *new_data = (char*)realloc(buffer->data, new_size);
+    if (!new_data) {
+        fprintf(stderr, "Error reallocating buffer to new size: %zu\n", new_size);
+        return false; // Reallocation failed
+    }
+    buffer->data = new_data;
+    buffer->size = new_size;
+    return true; // Reallocation successful
+}
+
+static bool reallocate_line_table(buffer *buffer, size_t new_capacity) {
+    // Implementation to reallocate the line table to a new capacity
+    line_entry_t *new_entries = (line_entry_t*)realloc(buffer->line_table.entries, new_capacity * sizeof(line_entry_t));
+    if (!new_entries) {
+        fprintf(stderr, "Error reallocating line table to new capacity: %zu\n", new_capacity);
+        return false; // Reallocation failed
+    }
+    buffer->line_table.entries = new_entries;
+    buffer->line_table.capacity = new_capacity;
+    return true; // Reallocation successful
+}
 
 /* 
 * This allocates the buffer, on failure this method will free up any resources it has allocated and return NULL, 
@@ -84,7 +113,7 @@ buffer* load_file_into_buffer(const char* filename) {
     fseek(f, 0, SEEK_SET);
 
     // 2. Allocate a buffer of the appropriate size
-    file_contents = (char*)malloc(file_size + 1); // +1 for null terminator
+    file_contents = (char*)malloc(file_size + 1 + INITIAL_BUFFER_SIZE); // +1 for null terminator and initial buffer size for future edits
     if (!file_contents) {
         fprintf(stderr, "Error allocating buffer for file: %s\n", filename);
         fclose(f);
@@ -137,7 +166,7 @@ buffer* load_file_into_buffer(const char* filename) {
     for (size_t i = 0; i < bytes_read; ++i) {
         if (file_contents[i] == '\n') {
             line_entries[line_count].offset = line_index;
-            line_entries[line_count].length = i - line_index;
+            line_entries[line_count].length = i - line_index; // Newline is not included in the length
             line_index = i + 1; // Move to the start of the next line
             line_count++;
         }
@@ -158,11 +187,164 @@ buffer* load_file_into_buffer(const char* filename) {
         free(line_entries);
         return NULL;
     }
-    b->size = bytes_read;
+    b->size = bytes_read + 1 + INITIAL_BUFFER_SIZE; // +1 for null terminator and initial buffer size for future edits
+    b->used = bytes_read;
     b->data = file_contents;
     b->line_table.entries = line_entries;
     b->line_table.count = line_count;
+    b->line_table.capacity = line_count;
     return b;
+}
+
+void insert_text(buffer *buffer, size_t line_number, size_t column_number, const char *text, size_t length) {
+    // Implementation to insert text into the buffer at the specified line and column
+    size_t line_length;
+    char *dest, *src;
+    if (line_number >= buffer->line_table.count) {
+        fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
+        return;
+    }
+    if (!text) {
+        fprintf(stderr, "Error: Text to insert is NULL\n");
+        return;
+    }
+
+    line_length = buffer->line_table.entries[line_number].length;
+
+    if (column_number > line_length) {
+        fprintf(stderr, "Error: Column number %zu is out of bounds for line %zu\n", column_number, line_number);
+        return;
+    }
+
+    // Check till where the buffer is currently used, if the new text exceeds the buffer size 
+    // we will need to reallocate the buffer with more space
+    if (buffer->used + line_length + length > buffer->size) {
+        // Reallocate the buffer with more space
+        size_t new_size = buffer->size * 2 + length; // Double the size
+        if (!reallocate_buffer(buffer, new_size)) {
+            fprintf(stderr, "Error inserting text\n");
+            return;
+        }
+    }
+
+    // using memcpy is faster here ( no overlap )
+    // copy the part before the insertion point to the new location
+    dest = buffer->data + buffer->used;
+    src = buffer->data + buffer->line_table.entries[line_number].offset;
+    memcpy(dest, src, column_number);
+    // copy the new text to the new location
+    dest = buffer->data + buffer->used + column_number;
+    src = (char*)text;
+    memcpy(dest, src, length);
+    // no need to copy the part after insertion point, if we insert at end
+    if (column_number == line_length) {
+        // update the line descriptor to point to the new version of the line
+        buffer->line_table.entries[line_number].offset = buffer->used;
+        buffer->line_table.entries[line_number].length = line_length + length;
+        buffer->used += line_length + length; // Update the used size of the buffer
+        return;
+    }
+    // copy the part after the insertion point to the new location
+    dest = buffer->data + buffer->used + column_number + length;
+    src = buffer->data + buffer->line_table.entries[line_number].offset + column_number;
+    memcpy(dest, src, line_length - column_number);
+
+    // update the line descriptor to point to the new version of the line
+    buffer->line_table.entries[line_number].offset = buffer->used;
+    buffer->line_table.entries[line_number].length = line_length + length;
+    buffer->used += line_length + length; // Update the used size of the buffer
+}
+
+void delete_text(buffer *buffer, size_t line_number, size_t column_number, size_t length) {
+    // Implementation to delete text from the buffer at the specified line and column
+    size_t line_length;
+    char *dest, *src;
+
+    // memove is used here because there is overlap when we are moving the remaining text to fill the gap
+    if (line_number >= buffer->line_table.count) {
+        fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
+        return;
+    }
+
+    line_length = buffer->line_table.entries[line_number].length;
+
+    if (column_number >= line_length) {
+        fprintf(stderr, "Error: Column number %zu is out of bounds for line %zu\n", column_number, line_number);
+        return;
+    }
+
+    if (column_number + length > line_length) {
+        length = line_length - column_number; // Adjust length to delete only till the end of the line
+    }
+
+    // if delete from the middle, we have to move
+    // else if deleting from the end, we just need to update the line length
+    if (column_number + length < line_length) {
+        // Move the remaining text to fill the gap
+        dest = buffer->data + buffer->line_table.entries[line_number].offset + column_number;
+        src = buffer->data + buffer->line_table.entries[line_number].offset + column_number + length;
+        memmove(dest, src, line_length - column_number - length);
+    }
+    
+    // Update the line descriptor to reflect the new length of the line
+    buffer->line_table.entries[line_number].length = line_length - length;
+    // no need to update the used size of the buffer, 
+    // as we are not actually removing any data from the buffer, just updating the line descriptor
+}
+
+void insert_line(buffer *buffer, size_t line_number) {
+    line_entry_t new_line_entry;
+    // Implementation to insert a new line into the buffer at the specified line number
+    if (line_number > buffer->line_table.count) {
+        fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
+        return;
+    }
+
+    // Allocate space for the new line in the buffer
+    if (buffer->used + 1 > buffer->size) {
+        // Reallocate the buffer with more space
+        size_t new_size = buffer->size * 2 + 1; // Double the size
+        if (!reallocate_buffer(buffer, new_size)) {
+            fprintf(stderr, "Error inserting line\n");
+            return;
+        }
+    }
+
+    // Check if we need to reallocate the line table to accommodate the new line
+    if (buffer->line_table.count + 1 > buffer->line_table.capacity) {
+        size_t new_capacity = buffer->line_table.capacity * 2 + 1; // Double the capacity
+        if (!reallocate_line_table(buffer, new_capacity)) {
+            fprintf(stderr, "Error reallocating line table\n");
+            return;
+        }
+    }
+
+    // create a new line entry for the new line
+    new_line_entry.offset = buffer->used; // New line starts at the end of the used buffer
+    new_line_entry.length = 0; // New line is empty initially
+
+    // Insert the new line entry into the line table
+    if (line_number < buffer->line_table.count) {
+        // Shift existing line entries down to make space for the new line
+        memmove(&buffer->line_table.entries[line_number + 1],
+                &buffer->line_table.entries[line_number],
+                (buffer->line_table.count - line_number) * sizeof(line_entry_t));
+    }
+    buffer->line_table.entries[line_number] = new_line_entry;
+    buffer->line_table.count++;
+}
+
+void delete_line(buffer *buffer, size_t line_number) {
+    // Implementation to delete a line from the buffer at the specified line number
+    if (line_number >= buffer->line_table.count) {
+        fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
+        return;
+    }
+    // Shift existing line entries up to fill the gap left by the deleted line
+    memmove(&buffer->line_table.entries[line_number],
+            &buffer->line_table.entries[line_number + 1],
+            (buffer->line_table.count - line_number - 1) * sizeof(line_entry_t));
+    buffer->line_table.count--;
 }
 
 /*
