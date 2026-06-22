@@ -38,6 +38,16 @@ void insert_line(buffer *buffer, size_t line_number);
 */
 void delete_line(buffer *buffer, size_t line_number);
 
+/*
+* Returns the number of lines in the buffer
+*/
+size_t buffer_line_count(buffer *buffer);
+
+/*
+* Returns a pointer to the line at the specified line number in the buffer
+*/  
+const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length);
+
 /* 
 * Frees the memory allocated for the buffer
 */

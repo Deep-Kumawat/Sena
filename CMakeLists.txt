@@ -21,3 +21,7 @@ target_compile_options(Sena PRIVATE
 target_link_options(Sena PRIVATE
     -fsanitize=address
 )
+
+enable_testing()
+
+add_subdirectory(test)

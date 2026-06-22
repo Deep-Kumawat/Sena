@@ -110,6 +110,11 @@ buffer* load_file_into_buffer(const char* filename) {
     // 1. Get the size of the file, if empty we will return an empty buffer
     fseek(f, 0, SEEK_END);
     file_size = ftell(f);
+    if (file_size < 0) {
+        fprintf(stderr, "Error getting file size: %s\n", filename);
+        fclose(f);
+        return NULL;
+    }
     fseek(f, 0, SEEK_SET);
 
     // 2. Allocate a buffer of the appropriate size
@@ -200,9 +205,16 @@ void insert_text(buffer *buffer, size_t line_number, size_t column_number, const
     // Implementation to insert text into the buffer at the specified line and column
     size_t line_length;
     char *dest, *src;
+
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return;
+    }
+
     if (line_number >= buffer->line_table.count) {
         fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
-        return;
+         return;
     }
     if (!text) {
         fprintf(stderr, "Error: Text to insert is NULL\n");
@@ -259,6 +271,12 @@ void delete_text(buffer *buffer, size_t line_number, size_t column_number, size_
     // Implementation to delete text from the buffer at the specified line and column
     size_t line_length;
     char *dest, *src;
+    
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return;
+    }
 
     // memove is used here because there is overlap when we are moving the remaining text to fill the gap
     if (line_number >= buffer->line_table.count) {
@@ -294,6 +312,11 @@ void delete_text(buffer *buffer, size_t line_number, size_t column_number, size_
 
 void insert_line(buffer *buffer, size_t line_number) {
     line_entry_t new_line_entry;
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return;
+    }
     // Implementation to insert a new line into the buffer at the specified line number
     if (line_number > buffer->line_table.count) {
         fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
@@ -335,6 +358,11 @@ void insert_line(buffer *buffer, size_t line_number) {
 }
 
 void delete_line(buffer *buffer, size_t line_number) {
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return;
+    }
     // Implementation to delete a line from the buffer at the specified line number
     if (line_number >= buffer->line_table.count) {
         fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
@@ -345,6 +373,34 @@ void delete_line(buffer *buffer, size_t line_number) {
             &buffer->line_table.entries[line_number + 1],
             (buffer->line_table.count - line_number - 1) * sizeof(line_entry_t));
     buffer->line_table.count--;
+}
+
+size_t buffer_line_count(buffer *buffer) {
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return 0;
+    }
+    // Implementation to return the number of lines in the buffer
+    return buffer->line_table.count;
+}
+
+const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length) {
+    // Check if buffer is valid
+    if (!buffer) {
+        fprintf(stderr, "Error: Buffer is NULL\n");
+        return NULL;
+    }
+
+    // Implementation to return a pointer to the line at the specified line number in the buffer
+    if (line_number >= buffer->line_table.count) {
+        fprintf(stderr, "Error: Line number %zu is out of bounds\n", line_number);
+        return NULL;
+    }
+    if (length) {
+        *length = buffer->line_table.entries[line_number].length;
+    }
+    return buffer->data + buffer->line_table.entries[line_number].offset;
 }
 
 /*
