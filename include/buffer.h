@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "position.h"
 
 /* Forward declaration of the Buffer structure, each text file owns a buffer */
 typedef struct buffer_s buffer;
@@ -47,6 +48,12 @@ size_t buffer_line_count(buffer *buffer);
 * Returns a pointer to the line at the specified line number in the buffer
 */  
 const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length);
+
+/*
+* Check if the position is valid for the given buffer, i.e. if the line and column numbers are within the bounds of the buffer
+* If the position is invalid, it will be adjusted to the nearest valid position within the buffer
+*/
+void normalize_buffer_position(buffer *buffer, position *pos);
 
 /* 
 * Frees the memory allocated for the buffer

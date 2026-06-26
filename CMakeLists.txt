@@ -7,6 +7,7 @@ add_executable(Sena)
 target_sources(Sena PRIVATE
     src/main.c
     src/editor/core/buffer.c
+    src/editor/core/editor.c
 )
 
 target_include_directories(Sena PRIVATE

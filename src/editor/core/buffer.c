@@ -403,6 +403,23 @@ const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length) 
     return buffer->data + buffer->line_table.entries[line_number].offset;
 }
 
+void normalize_buffer_position(buffer *buffer, position *pos) {
+    // Check if buffer is valid
+    if (!buffer || !pos) {
+        fprintf(stderr, "Error: Buffer or position is NULL\n");
+        return;
+    }
+
+    // Implementation to check if the position is valid for the given buffer
+    if (pos->y >= buffer->line_table.count) {
+        pos->y = buffer->line_table.count - 1; // Adjust to last line
+    }
+    size_t line_length = buffer->line_table.entries[pos->y].length;
+    if (pos->x > line_length) {
+        pos->x = line_length; // Adjust to end of line
+    }
+}
+
 /*
 * Should be called by the caller when they are done with the buffer
 */
