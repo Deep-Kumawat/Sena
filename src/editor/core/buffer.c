@@ -171,7 +171,7 @@ buffer* load_file_into_buffer(const char* filename) {
     for (size_t i = 0; i < bytes_read; ++i) {
         if (file_contents[i] == '\n') {
             line_entries[line_count].offset = line_index;
-            line_entries[line_count].length = i - line_index; // Newline is not included in the length
+            line_entries[line_count].length = i - line_index + 1; // Newline is included in the line length
             line_index = i + 1; // Move to the start of the next line
             line_count++;
         }
@@ -401,6 +401,47 @@ const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length) 
         *length = buffer->line_table.entries[line_number].length;
     }
     return buffer->data + buffer->line_table.entries[line_number].offset;
+}
+
+void normalize_buffer_position(buffer *buffer, position *pos) {
+    // Check if buffer is valid
+    if (!buffer || !pos) {
+        fprintf(stderr, "Error: Buffer or position is NULL\n");
+        return;
+    }
+
+    // Implementation to check if the position is valid for the given buffer
+    if (pos->y >= buffer->line_table.count) {
+        pos->y = buffer->line_table.count - 1; // Adjust to last line
+    }
+    size_t line_length = buffer->line_table.entries[pos->y].length;
+    if (pos->x > line_length) {
+        pos->x = line_length; // Adjust to end of line
+    }
+}
+
+void save_buffer_to_file(buffer *buffer, const char *filename) {
+    // Check if buffer is valid
+    if (!buffer || !filename) {
+        fprintf(stderr, "Error: Buffer or filename is NULL\n");
+        return;
+    }
+
+    FILE *f = fopen(filename, "w");
+    if (!f) {
+        fprintf(stderr, "Error opening file for writing: %s\n", filename);
+        return;
+    }
+
+    for (size_t i = 0; i < buffer->line_table.count; ++i) {
+        size_t line_length = buffer->line_table.entries[i].length;
+        const char *line_start = buffer->data + buffer->line_table.entries[i].offset;
+        fwrite(line_start, sizeof(char), line_length, f);
+        // no need to write a newline character, the buffer already contains the newline characters as part of the line content
+    }
+
+    // do not free the buffer here, the caller is responsible for freeing the buffer when they are done with it
+    fclose(f);
 }
 
 /*
