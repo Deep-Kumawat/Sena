@@ -77,6 +77,11 @@ const char* get_current_line_from_buffer(editor_state *editor_state, size_t line
 void remove_buffer_from_editor(editor_state *editor_state, size_t buffer_index);
 
 /*
+* Write buffer to disk ( save the file ) and free the buffer from memory
+*/
+void save_and_free_buffer_from_editor(editor_state *editor_state, size_t buffer_index);
+
+/*
 * Function to free the memory allocated for the editor state.
 */
 void free_editor_state(editor_state *editor_state);

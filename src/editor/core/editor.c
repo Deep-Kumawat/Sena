@@ -173,6 +173,23 @@ void remove_buffer_from_editor(editor_state *editor_state, size_t buffer_index) 
     }
 }
 
+void save_and_free_buffer_from_editor(editor_state *editor_state, size_t buffer_index) {
+    if (!editor_state || buffer_index >= MAX_BUFFERS || !editor_state->buffers[buffer_index]) {
+        fprintf(stderr, "Error: Invalid buffer index or editor state\n");
+        return;
+    }
+
+    buffer_state *buf_state = editor_state->buffers[buffer_index];
+    // Save the buffer to disk
+    save_buffer_to_file(buf_state->buf, buf_state->filename);
+
+    // just free the buffer state and set the pointer to NULL
+    free_buffer(buf_state->buf);
+    free(buf_state->filename);
+    free(buf_state);
+    editor_state->buffers[buffer_index] = NULL;
+}
+
 void free_editor_state(editor_state *editor_state) {
     if (!editor_state) {
         return;

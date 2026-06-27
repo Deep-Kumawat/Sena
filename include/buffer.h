@@ -55,6 +55,11 @@ const char *buffer_get_line(buffer *buffer, size_t line_number, size_t *length);
 */
 void normalize_buffer_position(buffer *buffer, position *pos);
 
+/*
+* Save the buffer to the specified file, overwriting the existing contents of the file
+*/
+void save_buffer_to_file(buffer *buffer, const char *filename);
+
 /* 
 * Frees the memory allocated for the buffer
 */

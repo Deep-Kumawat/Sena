@@ -58,6 +58,9 @@ int main(void) {
     assert(strncmp(line, text_before, pos.x) == 0); // The text before the cursor should remain unchanged
     assert(strncmp(line + pos.x, text_to_insert, strlen(text_to_insert)) == 0); // The text after the cursor should be the inserted text
 
+    // write the buffer to disk and free the buffer from memory
+    save_and_free_buffer_from_editor(editor, 0); // Save and free the first buffer
+
     // Clean up
     free_editor_state(editor);
     return 0;
